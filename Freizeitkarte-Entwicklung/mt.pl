@@ -48,6 +48,7 @@ my @actions = (
   [ 'bam',        'F. build all maps: gmap, nsis, gmapsupp, imagedir' ,    'optional' ],
   [ 'zip',        'G. zip all maps' ,                                      'optional' ],
   [ 'regions',    'H. extract regions from Europe data' ,                  'optional' ],
+  [ 'regions_osmc',  'H. extract regions from Europe data (osmconvert)' ,                  'optional' ],
   [ 'fetch_map',  'I. fetch map data from Europe directory' ,              'optional' ],
 
   # Hidden Actions not related to maps 
@@ -361,6 +362,14 @@ else {
   $max_threads = ' --max-threads=' . $cores;
 }
 
+# Definitely not enough arguments
+if ( ( $#ARGV + 1 ) < 1 ) {
+  printf { *STDOUT } ( "ERROR:\n  Not enough Arguments.\n\n\n" );
+  show_usage ();
+  exit(1);
+}
+
+
 # Fetch first only the actionname from the Arguments, there are some actions not needing map
 $actionname = $ARGV[ 0 ];
 
@@ -610,6 +619,9 @@ elsif ( $actionname eq 'zip' ) {
 }
 elsif ( $actionname eq 'regions' ) {
   extract_regions ();
+}
+elsif ( $actionname eq 'regions_osmc' ) {
+  extract_regions_osmconvert ();
 }
 elsif ( $actionname eq 'fetch_map' ) {
   fetch_mapdata ();
@@ -2865,6 +2877,70 @@ sub extract_regions {
         }	
  
      }
+  }
+  else {
+     printf { *STDERR } ( "\nERROR: $mapname is not an extract from which we create our own regions \n" );
+  }
+
+  return;
+}
+
+# Version with osmconvert
+# -----------------------------------------------
+sub extract_regions_osmconvert {
+
+  # If this map is a downloaded extract from which we extract further regions, continue
+  if ( $maptype == 1 ) {
+  
+     # Initialisations
+     my $source_filename = "$WORKDIR/$mapname.osm.pbf";
+   
+     # Check if the source file exists and is a valid osm.pbf file
+     if ( -e $source_filename ) {
+       if ( !check_osmpbf ( $source_filename ) ) {
+         printf { *STDERR } ( "\nError: Resulting data file <$source_filename> is not a valid osm.pbf file.\n" );
+         return ( 1 );
+       }
+     }
+     else {
+       printf { *STDERR } ( "\nError: Source data file <$source_filename> does not exists.\n" );
+       return ( 1 );
+     }
+   
+     # Run through the mapArray and check for regions belonging to that map -> fill array childmapnames
+	 for my $tmp_mapdata ( @maps ) {
+	    if ( @$tmp_mapdata[ $MAPPARENT ] eq $mapcode ) {
+
+           if ( ( $OSNAME eq 'linux' ) || ( $OSNAME eq 'freebsd' ) || ( $OSNAME eq 'openbsd' ) ) {
+             # OS X, Linux, FreeBSD, OpenBSD
+             $command = "$BASEPATH/tools/osmconvert/linux/osmconvert32 "
+             . "$source_filename "
+             . "-B=$BASEPATH/poly/" . @$tmp_mapdata[ $MAPNAME ] . ".poly "
+             . "-o=$WORKDIR/" . @$tmp_mapdata[ $MAPNAME ] . ".osm.pbf";
+             process_command ( $command );
+           }
+           elsif ( $OSNAME eq 'darwin' ) {
+             # OSX
+             $command = "$BASEPATH/tools/osmconvert/osx/osmconvert "
+             . "$source_filename "
+             . "-B=$BASEPATH/poly/" . @$tmp_mapdata[ $MAPNAME ] . ".poly "
+             . "-o=$WORKDIR/" . @$tmp_mapdata[ $MAPNAME ] . ".osm.pbf";
+             process_command ( $command );
+           }
+           elsif ( $OSNAME eq 'MSWin32' ) {
+             # Windows
+             $command = "$BASEPATH/tools/osmconvert/windows/osmconvert.exe "
+             . "$source_filename "
+             . "-B=$BASEPATH/poly/" . @$tmp_mapdata[ $MAPNAME ] . ".poly "
+             . "-o=$WORKDIR/" . @$tmp_mapdata[ $MAPNAME ] . ".osm.pbf";
+             process_command ( $command );
+           }
+           else {
+             printf { *STDERR } ( "\nFehler: Betriebssystem $OSNAME nicht unterstuetzt.\n" );
+           }	
+		}
+	 }
+     
   }
   else {
      printf { *STDERR } ( "\nERROR: $mapname is not an extract from which we create our own regions \n" );
